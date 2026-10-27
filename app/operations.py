@@ -94,6 +94,59 @@ class Root(Operation):
         return a ** (1 / b)
 
 
+class Modulus(Operation):
+    """Return the remainder of dividing one number by another."""
+
+    name = "modulus"
+    symbol = "%"
+
+    def execute(self, a: float, b: float) -> float:
+        """Return the remainder of a divided by b."""
+        # LBYL: modulus by zero is undefined
+        if b == 0:
+            raise OperationError("Modulus by zero is not allowed.")
+        return a % b
+
+
+class IntegerDivision(Operation):
+    """Divide one number by another, discarding the remainder."""
+
+    name = "int_divide"
+    symbol = "//"
+
+    def execute(self, a: float, b: float) -> float:
+        """Return the integer quotient of a divided by b."""
+        # LBYL: integer division by zero is undefined
+        if b == 0:
+            raise OperationError("Integer division by zero is not allowed.")
+        return a // b
+
+
+class Percentage(Operation):
+    """Express one number as a percentage of another."""
+
+    name = "percent"
+    symbol = "% of"
+
+    def execute(self, a: float, b: float) -> float:
+        """Return a as a percentage of b."""
+        # LBYL: a percentage of zero has no meaning
+        if b == 0:
+            raise OperationError("Cannot calculate a percentage of zero.")
+        return (a / b) * 100
+
+
+class AbsoluteDifference(Operation):
+    """Return the absolute difference between two numbers."""
+
+    name = "abs_diff"
+    symbol = "|-|"
+
+    def execute(self, a: float, b: float) -> float:
+        """Return the absolute difference between a and b."""
+        return abs(a - b)
+
+
 class OperationFactory:
     """Factory that creates Operation strategies by name."""
 
@@ -104,6 +157,10 @@ class OperationFactory:
         "divide": Division,
         "power": Power,
         "root": Root,
+        "modulus": Modulus,
+        "int_divide": IntegerDivision,
+        "percent": Percentage,
+        "abs_diff": AbsoluteDifference,
     }
 
     @classmethod
