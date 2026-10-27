@@ -3,7 +3,7 @@
 import pytest
 
 from app.calculator_config import CalculatorConfig
-from app.calculator_repl import Calculator, calculator_repl
+from app.calculator import Calculator, calculator_repl
 
 
 @pytest.fixture
