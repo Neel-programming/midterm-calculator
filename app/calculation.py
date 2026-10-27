@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from app.operations import Operation
+from app.operations import Operation, OperationFactory
 
 
 @dataclass
@@ -20,6 +20,17 @@ class Calculation:
     def create(cls, operation: Operation, a: float, b: float) -> "Calculation":
         """Execute the operation and return a Calculation record."""
         return cls(operation=operation, operand_a=a, operand_b=b, result=operation.execute(a, b))
+
+    @classmethod
+    def from_dict(cls, row: dict) -> "Calculation":
+        """Rebuild a Calculation from a dictionary read out of a CSV file."""
+        return cls(
+            operation=OperationFactory.create(row["operation"]),
+            operand_a=float(row["operand_a"]),
+            operand_b=float(row["operand_b"]),
+            result=float(row["result"]),
+            timestamp=datetime.fromisoformat(row["timestamp"]),
+        )
 
     def to_dict(self) -> dict:
         """Return the calculation as a dictionary for pandas."""
