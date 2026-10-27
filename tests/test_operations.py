@@ -59,14 +59,15 @@ def test_factory_creates_correct_strategy(name, operation_class):
 
 def test_factory_rejects_unknown_operation():
     """An unsupported name raises OperationError."""
-    with pytest.raises(OperationError, match="Unknown operation 'modulus'."):
-        OperationFactory.create("modulus")
+    with pytest.raises(OperationError, match="Unknown operation 'nonsense'."):
+        OperationFactory.create("nonsense")
 
 
 def test_factory_lists_supported_operations():
     """The factory reports every operation it supports."""
     assert OperationFactory.supported() == [
         "add", "subtract", "multiply", "divide", "power", "root",
+        "modulus", "int_divide", "percent", "abs_diff",
     ]
 
 

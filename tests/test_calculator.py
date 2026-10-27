@@ -2,16 +2,22 @@
 
 import pytest
 
+from app.calculator import Calculator, build_menu, calculator_repl
 from app.calculator_config import CalculatorConfig
-from app.calculator import Calculator, calculator_repl
 
 
 @pytest.fixture
 def calculator(tmp_path, monkeypatch):
-    """Return a calculator writing to a temporary directory."""
-    monkeypatch.delenv("CALCULATOR_MAX_HISTORY_SIZE", raising=False)
-    monkeypatch.delenv("CALCULATOR_PRECISION", raising=False)
-    return Calculator(CalculatorConfig(base_dir=tmp_path))
+    """Return a calculator writing to temporary directories."""
+    for name in [
+        "CALCULATOR_MAX_HISTORY_SIZE",
+        "CALCULATOR_PRECISION",
+        "CALCULATOR_MAX_INPUT_VALUE",
+        "CALCULATOR_AUTO_SAVE",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+    config = CalculatorConfig(log_dir=tmp_path / "logs", history_dir=tmp_path / "history")
+    return Calculator(config)
 
 
 def run_repl(monkeypatch, capsys, typed, calculator=None):
@@ -29,6 +35,10 @@ def run_repl(monkeypatch, capsys, typed, calculator=None):
     ("divide", 10, 2, 5),
     ("power", 2, 10, 1024),
     ("root", 27, 3, 3),
+    ("modulus", 10, 3, 1),
+    ("int_divide", 17, 5, 3),
+    ("percent", 25, 200, 12.5),
+    ("abs_diff", 3, 10, 7),
 ])
 def test_perform_returns_result(calculator, name, a, b, expected):
     """The facade runs each operation and records it."""
@@ -67,21 +77,43 @@ def test_clear_can_be_undone(calculator):
 
 
 def test_save_and_load(calculator):
-    """The facade saves history and loads it back."""
+    """The facade saves history and loads it back as Calculation objects."""
     calculator.perform("add", 2, 3)
     calculator.save()
+    calculator.history_manager.history = []
     assert len(calculator.load()) == 1
+
+
+def test_calculator_writes_to_its_log(calculator):
+    """Performing a calculation records it in the log file."""
+    calculator.perform("add", 2, 3)
+    assert "add(2, 3) = 5" in calculator.logger.log_path.read_text()
+
+def test_build_menu_lists_every_operation():
+    """The help menu is generated from the registered operations."""
+    menu = build_menu()
+    for name in ["add", "modulus", "int_divide", "percent", "abs_diff", "history", "exit"]:
+        assert name in menu
 
 
 @pytest.mark.parametrize("typed, expected", [
     ("add 2 3", "Result: 5.0"),
     ("power 2 10", "Result: 1024.0"),
     ("root 27 3", "Result: 3.0"),
+    ("modulus 10 3", "Result: 1.0"),
+    ("int_divide 17 5", "Result: 3.0"),
+    ("percent 25 200", "Result: 12.5"),
+    ("abs_diff 3 10", "Result: 7.0"),
     ("divide 5 0", "Division by zero is not allowed."),
+    ("modulus 5 0", "Modulus by zero is not allowed."),
+    ("int_divide 5 0", "Integer division by zero is not allowed."),
+    ("percent 5 0", "Cannot calculate a percentage of zero."),
     ("root 8 0", "Cannot take the zeroth root."),
-    ("modulus 5 3", "Unknown operation 'modulus'."),
+    ("root -8 3", "Cannot take the root of a negative number."),
+    ("nonsense 5 3", "Unknown operation 'nonsense'."),
     ("add two three", "is not a valid number"),
     ("add 1", "Expected two numbers"),
+    ("add 1 99999999999999999999", "exceeds the maximum"),
 ])
 def test_repl_single_command(monkeypatch, capsys, calculator, typed, expected):
     """Each command produces the expected output."""
@@ -140,7 +172,7 @@ def test_repl_load_without_saved_history(monkeypatch, capsys, calculator):
 def test_repl_load_shows_saved_history(monkeypatch, capsys, calculator):
     """Load prints the saved history."""
     output = run_repl(monkeypatch, capsys, ["add 2 3", "save", "load"], calculator)
-    assert "add" in output
+    assert "2.0 + 3.0 = 5.0" in output
 
 
 def test_repl_save_reports_errors(monkeypatch, capsys, calculator):
@@ -164,8 +196,7 @@ def test_repl_load_reports_errors(monkeypatch, capsys, calculator):
 
 def test_repl_ignores_blank_input(monkeypatch, capsys, calculator):
     """Pressing enter with no input re-prompts without an error."""
-    output = run_repl(monkeypatch, capsys, ["", "add 1 1"], calculator)
-    assert "Result: 2.0" in output
+    assert "Result: 2.0" in run_repl(monkeypatch, capsys, ["", "add 1 1"], calculator)
 
 
 def test_repl_exit_message(monkeypatch, capsys, calculator):
@@ -175,5 +206,6 @@ def test_repl_exit_message(monkeypatch, capsys, calculator):
 
 def test_repl_creates_its_own_calculator(monkeypatch, capsys, tmp_path):
     """The REPL builds a default calculator when none is supplied."""
-    monkeypatch.setenv("CALCULATOR_BASE_DIR", str(tmp_path))
+    monkeypatch.setenv("CALCULATOR_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("CALCULATOR_HISTORY_DIR", str(tmp_path / "history"))
     assert "Welcome" in run_repl(monkeypatch, capsys, [])

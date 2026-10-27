@@ -6,14 +6,22 @@ from app.calculation import Calculation
 from app.calculator_config import CalculatorConfig
 from app.exceptions import OperationError
 from app.history import AutoSaveObserver, HistoryManager, LoggingObserver
+from app.logger import Logger
 from app.operations import Addition, Multiplication
 
 
 @pytest.fixture
-def manager(tmp_path, monkeypatch):
-    """Return a history manager writing to a temporary directory."""
+def config(tmp_path, monkeypatch):
+    """Return a configuration pointing at temporary directories."""
     monkeypatch.delenv("CALCULATOR_MAX_HISTORY_SIZE", raising=False)
-    return HistoryManager(CalculatorConfig(base_dir=tmp_path))
+    monkeypatch.delenv("CALCULATOR_AUTO_SAVE", raising=False)
+    return CalculatorConfig(log_dir=tmp_path / "logs", history_dir=tmp_path / "history")
+
+
+@pytest.fixture
+def manager(config):
+    """Return a history manager writing to a temporary directory."""
+    return HistoryManager(config)
 
 
 def make_calculation(a=2, b=3):
@@ -59,15 +67,27 @@ def test_to_dataframe_contains_rows(manager):
 
 
 def test_save_then_load_round_trips(manager):
-    """History saved to CSV can be read back."""
+    """History saved to CSV is rebuilt as Calculation objects on load."""
     manager.add(make_calculation())
     manager.save()
-    assert len(manager.load()) == 1
+    manager.history = []
+    loaded = manager.load()
+    assert len(loaded) == 1
+    assert isinstance(loaded[0], Calculation)
+    assert loaded[0].result == 5
 
 
 def test_load_without_a_file_returns_empty(manager):
-    """Loading before anything is saved returns an empty DataFrame."""
-    assert manager.load().empty
+    """Loading before anything is saved returns an empty list."""
+    assert manager.load() == []
+
+
+def test_load_rejects_malformed_history(manager):
+    """A CSV missing required columns raises OperationError."""
+    manager.config.history_dir.mkdir(parents=True, exist_ok=True)
+    manager.config.history_file.write_text("wrong,columns\n1,2\n")
+    with pytest.raises(OperationError, match="malformed"):
+        manager.load()
 
 
 def test_save_failure_raises_operation_error(manager, monkeypatch):
@@ -91,12 +111,12 @@ def test_load_failure_raises_operation_error(manager, monkeypatch):
         manager.load()
 
 
-def test_logging_observer_records_calculations(manager):
-    """The logging observer records each calculation it sees."""
-    observer = LoggingObserver()
-    manager.attach(observer)
+def test_logging_observer_writes_to_log(manager, config):
+    """The logging observer records each calculation in the log file."""
+    logger = Logger(config.log_dir, name="test-observer")
+    manager.attach(LoggingObserver(logger))
     manager.add(make_calculation())
-    assert observer.entries == ["2 + 3 = 5"]
+    assert "add(2, 3) = 5" in logger.log_path.read_text()
 
 
 def test_auto_save_observer_saves_when_enabled(manager):

@@ -13,13 +13,17 @@ class Logger:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_path = self.log_dir / log_file
-
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.INFO)
 
-        # LBYL: only attach a handler if this logger does not already have one,
-        # otherwise repeated instantiation would duplicate every log line
-        if not self.logger.handlers:
+        # LBYL: replace existing handlers when this logger was previously
+        # configured for a different file, which happens when tests reuse a name
+        existing = [h for h in self.logger.handlers
+                    if getattr(h, "baseFilename", None) == str(self.log_path.resolve())]
+        if not existing:
+            for handler in list(self.logger.handlers):
+                self.logger.removeHandler(handler)
+                handler.close()
             handler = logging.FileHandler(self.log_path, encoding=encoding)
             handler.setFormatter(
                 logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
